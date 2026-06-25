@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>KLAVO · Tareas</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --navy:#16294D;
+    --naranja:#F2711C;
+    --bg:#F7F9FC;
+    --linea:#E2E8F0;
+    --texto:#16294D;
+    --gris:#64748B;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg);color:var(--texto);
+  }
+  header{background:var(--navy);padding:16px 20px}
+  .head-in{max-width:900px;margin:0 auto;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:12px}
+  .logo{display:flex;align-items:center;gap:8px}
+  .logo b{color:#fff;font-size:24px;letter-spacing:1px}
+  .logo .sep{color:var(--naranja);font-weight:300;font-size:24px}
+  .logo .tag{color:var(--naranja);font-size:12px;letter-spacing:3px;text-transform:uppercase;font-weight:600}
+  .sub{color:#94A3B8;font-size:12px;margin-top:4px;display:flex;align-items:center;gap:6px}
+  .vivo{display:inline-flex;align-items:center;gap:4px;color:#22C55E}
+  .dot{width:7px;height:7px;border-radius:50%;background:#22C55E;display:inline-block}
+  .btn{border:none;border-radius:9px;padding:9px 16px;font-size:14px;font-weight:600;cursor:pointer}
+  .btn-naranja{background:var(--naranja);color:#fff}
+  .btn-naranja:hover{opacity:.9}
+  .btn-navy{background:var(--navy);color:#fff}
+  .btn-ghost{background:#fff;color:var(--gris);border:1px solid var(--linea)}
+  nav{background:#fff;border-bottom:1px solid var(--linea);position:sticky;top:0;z-index:5}
+  .nav-in{max-width:900px;margin:0 auto;display:flex;gap:2px;padding:0 10px;overflow-x:auto}
+  .tab{padding:13px 16px;font-size:14px;font-weight:500;background:none;border:none;border-bottom:2px solid transparent;color:#94A3B8;cursor:pointer;white-space:nowrap}
+  .tab.activo{color:var(--navy);border-color:var(--naranja)}
+  main{max-width:900px;margin:0 auto;padding:22px 20px}
+  .card{background:#fff;border:1px solid var(--linea);border-radius:13px;padding:16px;margin-bottom:12px}
+  .grid4{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:22px}
+  @media(min-width:640px){.grid4{grid-template-columns:repeat(4,1fr)}}
+  .conteo .n{font-size:30px;font-weight:700}
+  .conteo .l{font-size:12px;color:var(--gris);margin-top:3px}
+  label{display:block;font-size:12px;color:var(--gris);margin-bottom:5px}
+  input,select,textarea{width:100%;border:1px solid #CBD5E1;border-radius:9px;padding:9px 11px;font-size:14px;font-family:inherit;margin-bottom:14px;background:#fff}
+  .row2{display:grid;grid-template-columns:1fr;gap:0}
+  @media(min-width:640px){.row2{grid-template-columns:1fr 1fr;gap:14px}}
+  .pill{font-size:12px;font-weight:600;padding:3px 9px;border-radius:999px;display:inline-block}
+  .chip{font-size:12px;padding:6px 12px;border-radius:999px;border:1px solid var(--linea);background:#fff;color:#475569;cursor:pointer;margin:0 6px 6px 0}
+  .chip.on{background:var(--navy);color:#fff;border-color:var(--navy)}
+  .estado-btn{font-size:12px;font-weight:600;padding:6px 12px;border-radius:9px;border:1px solid var(--linea);background:#fff;color:#94A3B8;cursor:pointer;margin-right:8px}
+  .tarea-top{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
+  .tarea-top h3{font-size:15px;margin-top:8px;word-break:break-word}
+  .tarea-top p{font-size:13px;color:var(--gris);margin-top:4px}
+  .x{background:none;border:none;color:#CBD5E1;font-size:20px;cursor:pointer;line-height:1}
+  .x:hover{color:#DC2626}
+  .meta{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:12px;padding-top:12px;border-top:1px solid #F1F5F9}
+  .meta small{font-size:12px;color:#94A3B8}
+  .meta select{width:auto;margin:0;padding:5px 8px;font-size:12px}
+  .barra{height:8px;background:#EEF2F7;border-radius:999px;overflow:hidden;margin:8px 0}
+  .barra > div{height:100%;border-radius:999px}
+  .vacio{text-align:center;padding:50px 20px;border:2px dashed var(--linea);border-radius:14px;color:var(--gris)}
+  footer{max-width:900px;margin:0 auto;padding:24px 20px;font-size:12px;color:#94A3B8}
+  .setup{max-width:620px;margin:40px auto;background:#fff;border:1px solid var(--linea);border-radius:14px;padding:28px}
+  .setup h2{margin-bottom:10px}
+  .setup p{color:var(--gris);font-size:14px;margin-bottom:10px;line-height:1.5}
+  .setup code{background:#F1F5F9;padding:2px 6px;border-radius:5px;font-size:13px}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--navy);color:#fff;padding:11px 18px;border-radius:10px;font-size:14px;box-shadow:0 6px 20px rgba(0,0,0,.2);z-index:50}
+  .filtros{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px}
+  .filtros select{width:auto;margin:0}
+</style>
+</head>
+<body>
+
+<!-- ============================================================= -->
+<!--  PASO IMPORTANTE: pega aquí tus 2 datos de Supabase            -->
+<!--  (los obtienes en Supabase → Settings → API)                   -->
+<!-- ============================================================= -->
+<script>
+  const SUPABASE_URL = "https://qqslndfbeqnmkkmlodsx.supabase.co";        // ej: https://abcd1234.supabase.co
+  const SUPABASE_ANON_KEY = "sb_publishable_8-L8wgh-gZriz_RQsmv-2w_lsxeRCaY"; // la clave "anon public"
+</script>
+<!-- ============================================================= -->
+
+<div id="app"></div>
+<div id="toast-zona"></div>
+
+<script>
+const CATEGORIAS = ["Marketing","Ventas","Logística","Inventario","Atención al cliente","Finanzas","General"];
+const ESTADOS = [
+  {id:"pendiente", label:"Pendiente", color:"#D97706", bg:"#FEF3C7"},
+  {id:"progreso",  label:"En progreso", color:"#2563EB", bg:"#DBEAFE"},
+  {id:"logrado",   label:"Logrado", color:"#059669", bg:"#D1FAE5"},
+];
+
+let supa = null;
+let socios = [];
+let tareas = [];
+let vista = "tablero";
+let filtroSocio = "todos";
+let filtroEstado = "todos";
+
+const configurado = !SUPABASE_URL.includes("PEGA_AQUI") && !SUPABASE_ANON_KEY.includes("PEGA_AQUI");
+
+// ---------- utilidades ----------
+function hoyISO(){const d=new Date();d.setHours(0,0,0,0);return d.toISOString().slice(0,10);}
+function diasRestantes(f){if(!f)return null;const h=new Date(hoyISO());const x=new Date(f+"T00:00:00");return Math.round((x-h)/86400000);}
+function estadoFecha(f,estado){
+  if(estado==="logrado")return{texto:"Logrado",color:"#059669",bg:"#D1FAE5"};
+  const d=diasRestantes(f);
+  if(d===null)return{texto:"Sin fecha",color:"#6B7280",bg:"#F3F4F6"};
+  if(d<0)return{texto:"Vencida hace "+Math.abs(d)+" d",color:"#DC2626",bg:"#FEE2E2"};
+  if(d===0)return{texto:"Vence hoy",color:"#D97706",bg:"#FEF3C7"};
+  if(d<=2)return{texto:"Vence en "+d+" d",color:"#D97706",bg:"#FEF3C7"};
+  return{texto:"Faltan "+d+" d",color:"#059669",bg:"#ECFDF5"};
+}
+function fechaBonita(f){if(!f)return"—";return new Date(f+"T00:00:00").toLocaleDateString("es-CR",{day:"numeric",month:"short"});}
+function esc(s){return (s||"").replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");}
+function rolesArr(s){return s.roles?String(s.roles).split(",").map(x=>x.trim()).filter(Boolean):[];}
+function nombreSocio(id){const s=socios.find(x=>String(x.id)===String(id));return s?s.nombre:null;}
+
+function toast(t){
+  const z=document.getElementById("toast-zona");
+  z.innerHTML='<div class="toast">'+esc(t)+'</div>';
+  setTimeout(()=>{z.innerHTML="";},3200);
+}
+
+// ---------- datos (Supabase) ----------
+async function cargarSocios(){
+  const {data}=await supa.from("socios").select("*").order("id");
+  socios=data||[];render();
+}
+async function cargarTareas(){
+  const {data}=await supa.from("tareas").select("*").order("id",{ascending:false});
+  tareas=data||[];render();
+}
+async function crearTarea(t){
+  await supa.from("tareas").insert([{titulo:t.titulo,detalle:t.detalle,area:t.area,asignado_id:t.asignado_id||null,estado:"pendiente",fecha_entrega:t.fecha_entrega||null}]);
+  await cargarTareas();
+  const n=nombreSocio(t.asignado_id);
+  toast(n?("Tarea asignada a "+n):"Tarea creada sin asignar");
+  vista="tablero";render();
+}
+async function setEstado(id,estado){await supa.from("tareas").update({estado}).eq("id",id);await cargarTareas();}
+async function setAsignado(id,asignado_id){await supa.from("tareas").update({asignado_id:asignado_id||null}).eq("id",id);await cargarTareas();}
+async function setFecha(id,fecha){await supa.from("tareas").update({fecha_entrega:fecha||null}).eq("id",id);await cargarTareas();}
+async function borrarTarea(id){await supa.from("tareas").delete().eq("id",id);await cargarTareas();}
+async function agregarSocio(nombre,roles){await supa.from("socios").insert([{nombre,roles:roles.join(",")}]);await cargarSocios();toast('Socio "'+nombre+'" agregado');}
+async function editarSocio(id,nombre,roles){await supa.from("socios").update({nombre,roles:roles.join(",")}).eq("id",id);await cargarSocios();toast("Socio actualizado");}
+async function borrarSocio(id){await supa.from("socios").delete().eq("id",id);await cargarSocios();}
+
+// ---------- conteos ----------
+function conteos(){
+  const c={pendiente:0,progreso:0,logrado:0,vencidas:0};
+  tareas.forEach(t=>{c[t.estado]=(c[t.estado]||0)+1;if(t.estado!=="logrado"&&diasRestantes(t.fecha_entrega)<0)c.vencidas++;});
+  return c;
+}
+
+// ---------- render principal ----------
+function render(){
+  const app=document.getElementById("app");
+  if(!configurado){app.innerHTML=pantallaSetup();return;}
+  app.innerHTML=`
+    <header>
+      <div class="head-in">
+        <div>
+          <div class="logo"><b>KLAVO</b><span class="sep">/</span><span class="tag">Tareas</span></div>
+          <div class="sub">Orden y transparencia para los socios <span class="vivo"><span class="dot"></span>En vivo</span></div>
+        </div>
+        <button class="btn btn-naranja" onclick="ir('nueva')">+ Nueva tarea</button>
+      </div>
+    </header>
+    <nav><div class="nav-in">
+      ${[["tablero","Tablero"],["resumen","Transparencia"],["socios","Socios"],["nueva","Nueva tarea"]].map(v=>
+        `<button class="tab ${vista===v[0]?'activo':''}" onclick="ir('${v[0]}')">${v[1]}</button>`).join("")}
+    </div></nav>
+    <main>${
+      vista==="tablero"?tablero():
+      vista==="resumen"?resumen():
+      vista==="socios"?seccionSocios():
+      nuevaTarea()
+    }</main>
+    <footer>App KLAVO · Conectada en vivo. Cada socio ve los cambios al instante desde su celular o computadora.</footer>
+  `;
+}
+function ir(v){vista=v;render();}
+
+// ---------- vistas ----------
+function tablero(){
+  const c=conteos();
+  let vis=tareas.filter(t=>(filtroSocio==="todos"||String(t.asignado_id)===filtroSocio)&&(filtroEstado==="todos"||t.estado===filtroEstado));
+  const conteosHtml=`<div class="grid4">
+    ${cardConteo("Pendientes",c.pendiente,"#D97706")}
+    ${cardConteo("En progreso",c.progreso,"#2563EB")}
+    ${cardConteo("Logradas",c.logrado,"#059669")}
+    ${cardConteo("Vencidas",c.vencidas,"#DC2626")}
+  </div>`;
+  const filtros=`<div class="filtros">
+    <select onchange="filtroSocio=this.value;render()">
+      <option value="todos"${filtroSocio==="todos"?" selected":""}>Todos los socios</option>
+      ${socios.map(s=>`<option value="${s.id}"${filtroSocio===String(s.id)?" selected":""}>${esc(s.nombre)}</option>`).join("")}
+    </select>
+    <select onchange="filtroEstado=this.value;render()">
+      <option value="todos"${filtroEstado==="todos"?" selected":""}>Todos los estados</option>
+      ${ESTADOS.map(e=>`<option value="${e.id}"${filtroEstado===e.id?" selected":""}>${e.label}</option>`).join("")}
+    </select>
+  </div>`;
+  let lista;
+  if(vis.length===0){
+    lista=`<div class="vacio"><p style="margin-bottom:12px">No hay tareas todavía.</p>
+      <button class="btn btn-navy" onclick="ir('nueva')">Crear la primera tarea</button></div>`;
+  }else{
+    lista=vis.map(tareaCard).join("");
+  }
+  return conteosHtml+filtros+lista;
+}
+function cardConteo(l,n,color){return `<div class="card conteo"><div class="n" style="color:${color}">${n}</div><div class="l">${l}</div></div>`;}
+
+function tareaCard(t){
+  const ef=estadoFecha(t.fecha_entrega,t.estado);
+  const botones=ESTADOS.map(e=>{
+    const on=t.estado===e.id;
+    return `<button class="estado-btn" style="${on?`background:${e.bg};color:${e.color};border-color:${e.color}`:''}" onclick="setEstado(${t.id},'${e.id}')">${e.label}</button>`;
+  }).join("");
+  const opciones=`<option value="">Sin asignar</option>`+socios.map(s=>`<option value="${s.id}"${String(t.asignado_id)===String(s.id)?" selected":""}>${esc(s.nombre)}</option>`).join("");
+  return `<div class="card">
+    <div class="tarea-top">
+      <div style="flex:1;min-width:0">
+        <span class="pill" style="background:#F1F5F9;color:#475569">${esc(t.area||"General")}</span>
+        <span class="pill" style="background:${ef.bg};color:${ef.color};margin-left:6px">${ef.texto}</span>
+        <h3>${esc(t.titulo)}</h3>
+        ${t.detalle?`<p>${esc(t.detalle)}</p>`:""}
+      </div>
+      <button class="x" onclick="borrarTarea(${t.id})" title="Eliminar">×</button>
+    </div>
+    <div style="margin-top:12px">${botones}</div>
+    <div class="meta">
+      <div style="display:flex;align-items:center;gap:8px"><small>Asignado a</small>
+        <select onchange="setAsignado(${t.id},this.value)">${opciones}</select></div>
+      <div style="display:flex;align-items:center;gap:8px"><small>Entrega</small>
+        <input type="date" style="width:auto;margin:0;padding:5px 8px;font-size:12px" value="${t.fecha_entrega||""}" onchange="setFecha(${t.id},this.value)"></div>
+    </div>
+  </div>`;
+}
+
+function resumen(){
+  const c=conteos();
+  const total=tareas.length;
+  const pct=total?Math.round((c.logrado/total)*100):0;
+  const porSocio=socios.map(s=>{
+    const suyas=tareas.filter(t=>String(t.asignado_id)===String(s.id));
+    return {nombre:s.nombre,total:suyas.length,
+      pendiente:suyas.filter(t=>t.estado==="pendiente").length,
+      progreso:suyas.filter(t=>t.estado==="progreso").length,
+      logrado:suyas.filter(t=>t.estado==="logrado").length,
+      vencidas:suyas.filter(t=>t.estado!=="logrado"&&diasRestantes(t.fecha_entrega)<0).length};
+  });
+  const maxT=Math.max(1,...porSocio.map(p=>p.total));
+  return `<div class="card">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end">
+        <div><div style="font-size:13px;color:var(--gris)">Avance general del equipo</div>
+          <div style="font-size:36px;font-weight:700">${pct}%</div></div>
+        <div style="font-size:13px;color:var(--gris);text-align:right">${c.logrado} de ${total} logradas</div>
+      </div>
+      <div class="barra"><div style="width:${pct}%;background:#059669"></div></div>
+    </div>
+    <h2 style="font-size:13px;color:var(--gris);text-transform:uppercase;letter-spacing:1px;margin:6px 0 12px">Carga por socio</h2>
+    ${porSocio.length===0?'<p style="color:var(--gris);font-size:14px">Agrega socios para ver la distribución.</p>':
+      porSocio.map(p=>`<div class="card">
+        <div style="display:flex;justify-content:space-between;margin-bottom:6px">
+          <b>${esc(p.nombre)}</b><span style="color:var(--gris);font-size:14px">${p.total} tareas</span></div>
+        <div class="barra"><div style="width:${(p.total/maxT)*100}%;background:var(--naranja)"></div></div>
+        <div style="display:flex;flex-wrap:wrap;gap:12px;font-size:12px">
+          <span style="color:#D97706">● ${p.pendiente} pendientes</span>
+          <span style="color:#2563EB">● ${p.progreso} en progreso</span>
+          <span style="color:#059669">● ${p.logrado} logradas</span>
+          ${p.vencidas>0?`<span style="color:#DC2626">● ${p.vencidas} vencidas</span>`:""}
+        </div></div>`).join("")}`;
+}
+
+// ---- Socios ----
+let formRoles=[];
+function seccionSocios(){
+  formRoles=formRoles||[];
+  const chips=CATEGORIAS.map(c=>`<button class="chip ${formRoles.includes(c)?'on':''}" onclick="toggleRolForm('${c}')">${c}</button>`).join("");
+  const lista=socios.map(s=>`
+    <button class="card" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="abrirEditar(${s.id})">
+      <div><div style="font-weight:600">${esc(s.nombre)}</div>
+      <div style="font-size:12px;color:var(--gris);margin-top:3px">${rolesArr(s).join(" · ")||"Sin áreas"}</div></div>
+      <span style="font-size:12px;color:#94A3B8">Editar ›</span>
+    </button>`).join("");
+  return `<div class="card">
+      <h2 style="font-weight:600;margin-bottom:12px">Agregar socio</h2>
+      <input id="nuevoNombre" placeholder="Nombre del socio">
+      <p style="font-size:12px;color:var(--gris);margin-bottom:8px">Áreas que maneja:</p>
+      <div style="margin-bottom:14px">${chips}</div>
+      <button class="btn btn-naranja" onclick="guardarNuevoSocio()">Agregar socio</button>
+    </div>
+    <p style="font-size:12px;color:#94A3B8;margin-bottom:12px">Toca un socio para editarlo.</p>
+    <div id="editZona"></div>
+    ${lista}`;
+}
+function toggleRolForm(c){formRoles.includes(c)?formRoles=formRoles.filter(x=>x!==c):formRoles.push(c);render();}
+function guardarNuevoSocio(){
+  const n=document.getElementById("nuevoNombre").value.trim();
+  if(!n)return;
+  agregarSocio(n, formRoles.length?formRoles.slice():["General"]);
+  formRoles=[];
+}
+function abrirEditar(id){
+  const s=socios.find(x=>String(x.id)===String(id));if(!s)return;
+  const roles=rolesArr(s);
+  const chips=CATEGORIAS.map(c=>`<button class="chip ${roles.includes(c)?'on':''}" data-rol="${c}" onclick="this.classList.toggle('on')">${c}</button>`).join("");
+  document.getElementById("editZona").innerHTML=`
+    <div class="card" style="border:2px solid var(--naranja)">
+      <input id="editNombre" value="${esc(s.nombre)}">
+      <div style="margin-bottom:14px" id="editChips">${chips}</div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-naranja" onclick="guardarEdicion(${id})">Guardar</button>
+        <button class="btn btn-ghost" onclick="render()">Cancelar</button>
+        <button class="btn" style="background:#fff;color:#DC2626;border:1px solid #FCA5A5;margin-left:auto" onclick="borrarSocio(${id})">Eliminar</button>
+      </div>
+    </div>`;
+  document.getElementById("editZona").scrollIntoView({behavior:"smooth",block:"center"});
+}
+function guardarEdicion(id){
+  const n=document.getElementById("editNombre").value.trim();if(!n)return;
+  const roles=[...document.querySelectorAll("#editChips .chip.on")].map(b=>b.dataset.rol);
+  editarSocio(id,n,roles.length?roles:["General"]);
+}
+
+// ---- Nueva tarea ----
+function nuevaTarea(){
+  const sinSocios=socios.length===0;
+  return `<div class="card" style="max-width:640px">
+    <h2 style="font-weight:600;margin-bottom:16px">Nueva tarea</h2>
+    <label>Título</label>
+    <input id="ntTitulo" placeholder="Ej. Publicar 3 reels de Lattafa esta semana">
+    <label>Detalle (opcional)</label>
+    <textarea id="ntDetalle" rows="2"></textarea>
+    <label>Asignar a</label>
+    <select id="ntAsignado">
+      <option value="">Sin asignar</option>
+      ${socios.map(s=>`<option value="${s.id}">${esc(s.nombre)}</option>`).join("")}
+    </select>
+    <div class="row2">
+      <div><label>Área</label>
+        <select id="ntArea">${CATEGORIAS.map(c=>`<option>${c}</option>`).join("")}</select></div>
+      <div><label>Fecha de entrega</label>
+        <input type="date" id="ntFecha"></div>
+    </div>
+    ${sinSocios?'<div style="background:#FFF3EA;color:#9A4310;font-size:12px;padding:9px 11px;border-radius:9px;margin-bottom:14px">Agrega socios primero para poder asignarles la tarea.</div>':''}
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-naranja" onclick="enviarNueva()">Crear tarea</button>
+      <button class="btn btn-ghost" onclick="ir('tablero')">Cancelar</button>
+    </div>
+  </div>`;
+}
+function enviarNueva(){
+  const titulo=document.getElementById("ntTitulo").value.trim();
+  if(!titulo)return;
+  crearTarea({
+    titulo,
+    detalle:document.getElementById("ntDetalle").value.trim(),
+    area:document.getElementById("ntArea").value,
+    asignado_id:document.getElementById("ntAsignado").value,
+    fecha_entrega:document.getElementById("ntFecha").value
+  });
+}
+
+// ---- Pantalla de configuración ----
+function pantallaSetup(){
+  return `<header><div class="head-in"><div class="logo"><b>KLAVO</b><span class="sep">/</span><span class="tag">Tareas</span></div></div></header>
+  <div class="setup">
+    <h2>Falta un paso para activarla</h2>
+    <p>Esta app necesita conectarse a tu base de datos gratis de <b>Supabase</b> para que todos los socios vean lo mismo en vivo.</p>
+    <p>Abre este archivo HTML y, casi al inicio, pega tus 2 datos donde dice:</p>
+    <p><code>SUPABASE_URL = "..."</code><br><code>SUPABASE_ANON_KEY = "..."</code></p>
+    <p>Los encuentras en Supabase → <b>Settings → API</b>. Cuando los pegues y subas el archivo a Netlify, la app funcionará sola.</p>
+  </div>`;
+}
+
+// ---- arranque ----
+async function iniciar(){
+  if(!configurado){render();return;}
+  supa=supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY);
+  await cargarSocios();
+  await cargarTareas();
+  // sincronización en vivo
+  supa.channel("klavo-cambios")
+    .on("postgres_changes",{event:"*",schema:"public",table:"socios"},cargarSocios)
+    .on("postgres_changes",{event:"*",schema:"public",table:"tareas"},cargarTareas)
+    .subscribe();
+}
+iniciar();
+</script>
+</body>
+</html>
