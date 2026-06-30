@@ -3,6 +3,13 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta name="theme-color" content="#16294D"/>
+<meta name="mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="KLAVO"/>
+<link rel="manifest" href="manifest.json"/>
+<link rel="apple-touch-icon" href="icon-192.png"/>
 <title>KLAVO · Control</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -217,8 +224,33 @@ async function crearPost(p){
   await supa.from("posts").insert([{titulo:p.titulo,descripcion:p.descripcion,plataforma:p.plataforma,tipo_contenido:p.tipo_contenido,fecha:p.fecha,hora:p.hora||"12:00",ideas_ref:p.ideas_ref||"",estado:"pendiente"}]);
   await cargarPosts();toast("Post planificado para "+p.fecha);vista="marketing";render();
 }
-async function setEstado(id,estado){await supa.from("tareas").update({estado}).eq("id",id);await cargarTareas();render();}
-async function setAsignado(id,asignado_id){await supa.from("tareas").update({asignado_id:asignado_id||null}).eq("id",id);await cargarTareas();render();}
+async function setEstado(id,estado){
+  await supa.from("tareas").update({estado}).eq("id",id);
+  await cargarTareas();
+  // Notificar al socio asignado
+  const tarea=tareas.find(t=>t.id===id);
+  if(tarea?.asignado_id){
+    const socio=socios.find(s=>String(s.id)===String(tarea.asignado_id));
+    const emojis={pendiente:"⏳",progreso:"▶️",logrado:"✅"};
+    const msg=`${emojis[estado]||""} Tarea "${(tarea.titulo||"").substring(0,40)}" → ${estado}`;
+    enviarPush(tarea.asignado_id,"KLAVO · Tarea actualizada",msg);
+    notifLocal("KLAVO · Tarea actualizada",msg);
+  }
+  render();
+}
+async function setAsignado(id,asignado_id){
+  await supa.from("tareas").update({asignado_id:asignado_id||null}).eq("id",id);
+  await cargarTareas();
+  // Notificar al socio recién asignado
+  if(asignado_id){
+    const tarea=tareas.find(t=>t.id===id);
+    const socio=socios.find(s=>String(s.id)===String(asignado_id));
+    const msg=`📋 Te asignaron: "${(tarea?.titulo||"").substring(0,50)}"`;
+    enviarPush(asignado_id,"KLAVO · Nueva tarea asignada",msg);
+    notifLocal("KLAVO · Nueva tarea asignada",msg);
+  }
+  render();
+}
 async function setFecha(id,fecha){await supa.from("tareas").update({fecha_entrega:fecha||null}).eq("id",id);await cargarTareas();render();}
 async function borrarTarea(id){await supa.from("tareas").delete().eq("id",id);await cargarTareas();render();}
 async function borrarPost(id){await supa.from("posts").delete().eq("id",id);await cargarPosts();render();}
@@ -483,7 +515,8 @@ function render(){
   else if(vista==="ventas") mainHtml=seccionVentas();
   else if(vista==="ia") mainHtml=seccionIA();
   else if(vista==="setup") mainHtml=seccionSetup();
-  const hdr='<header><div class="head-in"><div class="logo"><b>KLAVO</b><span class="sep">/</span><span class="tag">Control</span></div><div style="display:flex;gap:8px"><button class="btn btn-ghost btn-sm" onclick="ir(\'setup\')">⚙️ Setup</button><button class="btn btn-naranja" onclick="ir(\'nueva-tarea\')">+ Tarea</button></div></div></header>';
+  const instBtn = deferredInstall ? `<button class="btn btn-ghost btn-sm" onclick="instalarPWA()">📲 Instalar app</button>` : '';
+  const hdr=`<header><div class="head-in"><div class="logo"><b>KLAVO</b><span class="sep">/</span><span class="tag">Control</span></div><div style="display:flex;gap:8px">${instBtn}<button class="btn btn-ghost btn-sm" onclick="ir('setup')">⚙️ Setup</button><button class="btn btn-naranja" onclick="ir('nueva-tarea')">+ Tarea</button></div></div></header>`;
   const nav='<nav><div class="nav-in">'+
     ['tablero','tareas','ventas','catalogo','marketing','ia','socios','transparencia'].map((v,i)=>{
       const labels=["Dashboard","Tareas","Ventas","Catálogo","Marketing","🤖 IA Klavo","Socios","Transparencia"];
@@ -719,12 +752,28 @@ function abrirImagenFull(url,nombre){
   </div>`;
 }
 
+let busquedaCatalogo = "";
+let filtroCat = "todas";
+
 function seccionCatalogo(){
   const cats=[...new Set(productos.map(p=>p.categoria))].sort();
-  let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+
+  // Filtrar por búsqueda y categoría
+  const busq=busquedaCatalogo.toLowerCase().trim();
+  const prodsFiltrados=productos.filter(p=>{
+    const matchBusq=!busq ||
+      p.nombre.toLowerCase().includes(busq) ||
+      (p.descripcion||"").toLowerCase().includes(busq) ||
+      (p.categoria||"").toLowerCase().includes(busq);
+    const matchCat=filtroCat==="todas"||p.categoria===filtroCat;
+    return matchBusq&&matchCat;
+  });
+  const catsFiltradas=[...new Set(prodsFiltrados.map(p=>p.categoria))].sort();
+
+  let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
     <div>
       <h2 style="font-size:18px;font-weight:600">Catálogo de Productos</h2>
-      <p style="font-size:12px;color:var(--gris);margin-top:2px">${productos.length} productos · ${cats.length} categorías</p>
+      <p style="font-size:12px;color:var(--gris);margin-top:2px">${prodsFiltrados.length} de ${productos.length} productos · ${cats.length} categorías</p>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <button class="btn btn-ghost btn-sm" onclick="vistaGrid=!vistaGrid;render()">${vistaGrid?"☰ Lista":"⊞ Galería"}</button>
@@ -734,16 +783,38 @@ function seccionCatalogo(){
       <button class="btn btn-naranja" onclick="mostrarFormProd()">+ Agregar producto</button>
     </div>
   </div>
+
+  <!-- BUSCADOR -->
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+    <div style="position:relative;flex:1;min-width:200px">
+      <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:15px;pointer-events:none">🔍</span>
+      <input
+        id="inputBusqueda"
+        placeholder="Buscar producto..."
+        value="${esc(busquedaCatalogo)}"
+        oninput="busquedaCatalogo=this.value;render()"
+        style="padding-left:34px;margin:0;width:100%"
+      >
+    </div>
+    <select onchange="filtroCat=this.value;render()" style="width:auto;margin:0">
+      <option value="todas" ${filtroCat==="todas"?"selected":""}>Todas las categorías</option>
+      ${cats.map(c=>`<option value="${esc(c)}" ${filtroCat===c?"selected":""}>${c}</option>`).join("")}
+    </select>
+    ${busquedaCatalogo||filtroCat!=="todas"?`<button class="btn btn-ghost btn-sm" onclick="busquedaCatalogo='';filtroCat='todas';render()">✕ Limpiar</button>`:""}
+  </div>
+
   <div id="formProd"></div>
   <div id="loteResultado"></div>`;
 
-  if(productos.length===0){
-    html+=`<div class="vacio"><div style="font-size:40px;margin-bottom:10px">📦</div><p style="font-weight:600;margin-bottom:4px">Sin productos aún</p><p style="font-size:13px">Agregá tu primer producto con foto o importá desde CSV.</p><button class="btn btn-naranja" style="margin-top:14px" onclick="mostrarFormProd()">+ Agregar primer producto</button></div>`;
+  if(prodsFiltrados.length===0){
+    html+=productos.length===0
+      ?`<div class="vacio"><div style="font-size:40px;margin-bottom:10px">📦</div><p style="font-weight:600;margin-bottom:4px">Sin productos aún</p><p style="font-size:13px">Agregá tu primer producto con foto o importá desde CSV.</p><button class="btn btn-naranja" style="margin-top:14px" onclick="mostrarFormProd()">+ Agregar primer producto</button></div>`
+      :`<div class="vacio"><div style="font-size:36px;margin-bottom:10px">🔍</div><p style="font-weight:600;margin-bottom:4px">Sin resultados para "${esc(busquedaCatalogo)}"</p><p style="font-size:13px">Probá con otro nombre o categoría.</p><button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="busquedaCatalogo='';filtroCat='todas';render()">Limpiar búsqueda</button></div>`;
     return html;
   }
 
-  cats.forEach(cat=>{
-    const prods=productos.filter(p=>p.categoria===cat);
+  catsFiltradas.forEach(cat=>{
+    const prods=prodsFiltrados.filter(p=>p.categoria===cat);
     html+=`<p class="seccion-titulo">${cat} <span style="font-weight:400;color:#94A3B8">(${prods.length})</span></p>`;
     if(vistaGrid){
       // ── VISTA GALERÍA ──
@@ -1399,7 +1470,7 @@ function seccionSocios(){
   formRoles=formRoles||[];
   let chips="";CATEGORIAS_TAREA.forEach(c=>{chips+=`<button class="chip ${formRoles.includes(c)?"on":""}" onclick="toggleRolForm('${c}')">${c}</button>`;});
   let html=`<div class="card"><h2 style="font-weight:600;margin-bottom:12px">Agregar socio</h2><input id="nuevoNombre" placeholder="Nombre del socio"><p style="font-size:12px;color:var(--gris);margin-bottom:8px">Áreas que maneja:</p><div style="margin-bottom:12px">${chips}</div><button class="btn btn-naranja" onclick="guardarNuevoSocio()">Agregar socio</button></div><p style="font-size:12px;color:#94A3B8;margin-bottom:10px">Tocá un socio para editarlo.</p><div id="editZona"></div>`;
-  socios.forEach(s=>{html+=`<button class="card" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="abrirEditar(${s.id})"><div><div style="font-weight:600">${esc(s.nombre)}</div><div style="font-size:12px;color:var(--gris);margin-top:2px">${rolesArr(s).join(" · ")||"Sin áreas"}</div></div><span style="font-size:12px;color:#94A3B8">Editar ›</span></button>`;});
+  socios.forEach(s=>{html+=`<button class="card" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="abrirEditar(${s.id})"><div><div style="font-weight:600">${esc(s.nombre)}</div><div style="font-size:12px;color:var(--gris);margin-top:2px">${rolesArr(s).join(" · ")||"Sin áreas"}</div></div><div style="display:flex;align-items:center;gap:8px"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();suscribirNotificaciones(${s.id})" title="Activar notificaciones en este dispositivo">🔔 Activar notif.</button><span style="font-size:12px;color:#94A3B8">Editar ›</span></div></button>`;});
   return html;
 }
 function toggleRolForm(c){if(formRoles.includes(c)){formRoles=formRoles.filter(x=>x!==c);}else{formRoles.push(c);}render();}
@@ -1504,6 +1575,30 @@ CREATE POLICY "Public read" ON storage.objects FOR SELECT USING (bucket_id = 'kl
 CREATE POLICY "Auth upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id = 'klavo');</pre>
       <a href="https://supabase.com/dashboard" target="_blank" class="btn btn-ghost btn-sm" style="text-decoration:none">→ Abrir Supabase Storage</a>
     </div>
+    <div class="card" style="margin-top:12px">
+      <p style="font-size:13px;font-weight:600;margin-bottom:6px">6. 🔔 Notificaciones Push (PWA)</p>
+      <p style="font-size:13px;color:var(--gris);margin-bottom:10px">Para activar notificaciones push en los celulares de los socios necesitás 3 pasos:</p>
+      <p style="font-size:12px;font-weight:600;margin-bottom:4px">Paso 1 — Crear tabla en Supabase:</p>
+      <pre class="sql">CREATE TABLE IF NOT EXISTS notificaciones (
+  id bigserial PRIMARY KEY,
+  socio_id bigint REFERENCES socios(id) ON DELETE CASCADE,
+  endpoint text NOT NULL,
+  p256dh text,
+  auth text,
+  activo boolean DEFAULT true,
+  created_at timestamptz DEFAULT now(),
+  UNIQUE(socio_id)
+);
+ALTER TABLE notificaciones ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all" ON notificaciones FOR ALL USING (true) WITH CHECK (true);</pre>
+      <p style="font-size:12px;font-weight:600;margin:8px 0 4px">Paso 2 — Generar VAPID keys:</p>
+      <p style="font-size:12px;color:var(--gris);margin-bottom:6px">Entrá a <a href="https://web-push-codelab.glitch.me" target="_blank" style="color:var(--naranja)">web-push-codelab.glitch.me</a> → Generate → copiá la Public Key</p>
+      <label>VAPID Public Key</label>
+      <input id="vapidInput" placeholder="BEl3..." value="${localStorage.getItem('klavo_vapid_key')||''}">
+      <button class="btn btn-naranja btn-sm" onclick="const v=document.getElementById('vapidInput').value.trim();if(v){localStorage.setItem('klavo_vapid_key',v);toast('✅ VAPID key guardada');}">Guardar VAPID Key</button>
+      <p style="font-size:12px;font-weight:600;margin:10px 0 4px">Paso 3 — Cada socio activa notificaciones:</p>
+      <p style="font-size:12px;color:var(--gris)">Cada socio abre la app en su celular → pestaña <b>Socios</b> → toca <b>🔔 Activar notif.</b> en su nombre → acepta el permiso del navegador.</p>
+    </div>
     <button class="btn btn-ghost" style="margin-top:12px" onclick="ir('tablero')">← Volver al Dashboard</button>
   </div>`;
 }
@@ -1534,7 +1629,110 @@ async function iniciar(){
     .on("postgres_changes",{event:"*",schema:"public",table:"ventas"},()=>{cargarVentas().then(render);})
     .subscribe();
 }
-iniciar();
+// ═══════════════════════════════════════════════════════
+// PWA — Registro Service Worker + Notificaciones Push
+// ═══════════════════════════════════════════════════════
+
+// VAPID public key — reemplazá con la tuya de OneSignal o generada
+// Para generar: https://web-push-codelab.glitch.me/
+const VAPID_PUBLIC_KEY = localStorage.getItem('klavo_vapid_key') || '';
+
+async function registrarSW(){
+  if(!('serviceWorker' in navigator)) return;
+  try{
+    const reg = await navigator.serviceWorker.register('/sw.js');
+    console.log('✅ SW registrado');
+    return reg;
+  } catch(e){ console.warn('SW error:', e); }
+}
+
+async function pedirPermisoNotificaciones(){
+  if(!('Notification' in window)){
+    toast('Tu navegador no soporta notificaciones','err'); return false;
+  }
+  if(Notification.permission === 'granted') return true;
+  const perm = await Notification.requestPermission();
+  return perm === 'granted';
+}
+
+async function suscribirNotificaciones(socioId){
+  const ok = await pedirPermisoNotificaciones();
+  if(!ok){ toast('Permiso de notificaciones denegado','err'); return null; }
+  if(!VAPID_PUBLIC_KEY){ toast('Configurá la VAPID key en Setup → Notificaciones','err'); return null; }
+  try{
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({
+      userVisibleOnly: true,
+      applicationServerKey: urlBase64ToUint8Array(VAPID_PUBLIC_KEY)
+    });
+    // Guardar suscripción en Supabase
+    await supa.from('notificaciones').upsert([{
+      socio_id: socioId,
+      endpoint: sub.endpoint,
+      p256dh: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('p256dh')))),
+      auth: btoa(String.fromCharCode(...new Uint8Array(sub.getKey('auth')))),
+      activo: true
+    }], {onConflict: 'socio_id'});
+    toast('✅ Notificaciones activadas en este dispositivo');
+    return sub;
+  } catch(e){ toast('Error al suscribir: '+e.message,'err'); return null; }
+}
+
+function urlBase64ToUint8Array(base64String){
+  const padding = '='.repeat((4-base64String.length%4)%4);
+  const base64 = (base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw = window.atob(base64);
+  return Uint8Array.from([...raw].map(c=>c.charCodeAt(0)));
+}
+
+// ── Notificación local (cuando la app está abierta) ──
+function notifLocal(titulo, cuerpo, url='/'){
+  if(Notification.permission !== 'granted') return;
+  new Notification(titulo, {
+    body: cuerpo,
+    icon: '/icon-192.png',
+    badge: '/icon-192.png',
+    tag: 'klavo-'+Date.now(),
+    data: { url }
+  });
+}
+
+// ── Enviar push via Supabase Edge Function ────────────
+async function enviarPush(socioId, titulo, cuerpo){
+  // Buscar suscripción del socio
+  const {data: subs} = await supa.from('notificaciones')
+    .select('*').eq('socio_id', socioId).eq('activo', true);
+  if(!subs?.length) return; // socio sin notificaciones activadas
+
+  const edgeFnUrl = SUPABASE_URL + '/functions/v1/enviar-push';
+  try{
+    await fetch(edgeFnUrl, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','Authorization':'Bearer '+SUPABASE_ANON_KEY},
+      body: JSON.stringify({ titulo, cuerpo, suscripciones: subs })
+    });
+  } catch(e){ console.warn('Push error:', e); }
+}
+
+// ── Iniciar PWA ───────────────────────────────────────
+registrarSW();
+
+// Prompt instalar app
+let deferredInstall = null;
+window.addEventListener('beforeinstallprompt', e => {
+  e.preventDefault();
+  deferredInstall = e;
+  // Mostrar botón de instalación en la app
+  render();
+});
+
+async function instalarPWA(){
+  if(!deferredInstall){ toast('La app ya está instalada o tu navegador no lo soporta'); return; }
+  deferredInstall.prompt();
+  const { outcome } = await deferredInstall.userChoice;
+  if(outcome === 'accepted') toast('✅ KLAVO instalada en tu dispositivo');
+  deferredInstall = null;
+}
 </script>
 </body>
 </html>
