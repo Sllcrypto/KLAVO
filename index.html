@@ -1468,12 +1468,21 @@ function enviarNuevaTarea(){
 // ═══════════════════════════════════════════════════════
 function seccionSocios(){
   formRoles=formRoles||[];
-  let chips="";CATEGORIAS_TAREA.forEach(c=>{chips+=`<button class="chip ${formRoles.includes(c)?"on":""}" onclick="toggleRolForm('${c}')">${c}</button>`;});
+  let chips="";CATEGORIAS_TAREA.forEach(c=>{chips+=`<button class="chip chip-rol ${formRoles.includes(c)?"on":""}" data-rol="${c}" onclick="toggleRolForm('${c}')">${c}</button>`;});
   let html=`<div class="card"><h2 style="font-weight:600;margin-bottom:12px">Agregar socio</h2><input id="nuevoNombre" placeholder="Nombre del socio"><p style="font-size:12px;color:var(--gris);margin-bottom:8px">Áreas que maneja:</p><div style="margin-bottom:12px">${chips}</div><button class="btn btn-naranja" onclick="guardarNuevoSocio()">Agregar socio</button></div><p style="font-size:12px;color:#94A3B8;margin-bottom:10px">Tocá un socio para editarlo.</p><div id="editZona"></div>`;
   socios.forEach(s=>{html+=`<button class="card" style="width:100%;text-align:left;display:flex;justify-content:space-between;align-items:center;cursor:pointer" onclick="abrirEditar(${s.id})"><div><div style="font-weight:600">${esc(s.nombre)}</div><div style="font-size:12px;color:var(--gris);margin-top:2px">${rolesArr(s).join(" · ")||"Sin áreas"}</div></div><div style="display:flex;align-items:center;gap:8px"><button class="btn btn-ghost btn-sm" onclick="event.stopPropagation();suscribirNotificaciones(${s.id})" title="Activar notificaciones en este dispositivo">🔔 Activar notif.</button><span style="font-size:12px;color:#94A3B8">Editar ›</span></div></button>`;});
   return html;
 }
-function toggleRolForm(c){if(formRoles.includes(c)){formRoles=formRoles.filter(x=>x!==c);}else{formRoles.push(c);}render();}
+function toggleRolForm(c){
+  if(formRoles.includes(c)){formRoles=formRoles.filter(x=>x!==c);}
+  else{formRoles.push(c);}
+  // Actualizar solo los chips sin recargar toda la sección
+  document.querySelectorAll('.chip-rol').forEach(btn=>{
+    const rol=btn.dataset.rol;
+    if(formRoles.includes(rol)){btn.classList.add('on');}
+    else{btn.classList.remove('on');}
+  });
+}
 function guardarNuevoSocio(){const n=document.getElementById("nuevoNombre").value.trim();if(!n)return;agregarSocio(n,formRoles.length?formRoles.slice():["General"]);formRoles=[];}
 function abrirEditar(id){const s=socios.find(x=>String(x.id)===String(id));if(!s)return;const roles=rolesArr(s);let chips="";CATEGORIAS_TAREA.forEach(c=>{chips+=`<button class="chip ${roles.includes(c)?"on":""}" data-rol="${c}" onclick="this.classList.toggle('on')">${c}</button>`;});document.getElementById("editZona").innerHTML=`<div class="card" style="border:2px solid var(--naranja)"><input id="editNombre" value="${esc(s.nombre)}"><div style="margin-bottom:12px" id="editChips">${chips}</div><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-naranja" onclick="guardarEdicion(${id})">Guardar</button><button class="btn btn-ghost" onclick="render()">Cancelar</button><button class="btn" style="background:#fff;color:#DC2626;border:1px solid #FCA5A5;margin-left:auto" onclick="borrarSocio(${id})">Eliminar</button></div></div>`;document.getElementById("editZona").scrollIntoView({behavior:"smooth"});}
 function guardarEdicion(id){const n=document.getElementById("editNombre").value.trim();if(!n)return;const roles=[...document.querySelectorAll("#editChips .chip.on")].map(b=>b.dataset.rol);editarSocio(id,n,roles.length?roles:["General"]);}
