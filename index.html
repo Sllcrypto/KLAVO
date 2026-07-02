@@ -754,13 +754,12 @@ function abrirImagenFull(url,nombre){
 
 let busquedaCatalogo = "";
 let filtroCat = "todas";
+let _debounceBusquedaCatalogo = null;
 
-function seccionCatalogo(){
-  const cats=[...new Set(productos.map(p=>p.categoria))].sort();
-
-  // Filtrar por búsqueda y categoría
+// Calcula la lista de productos según búsqueda + categoría activas
+function productosFiltradosCatalogo(){
   const busq=busquedaCatalogo.toLowerCase().trim();
-  const prodsFiltrados=productos.filter(p=>{
+  return productos.filter(p=>{
     const matchBusq=!busq ||
       p.nombre.toLowerCase().includes(busq) ||
       (p.descripcion||"").toLowerCase().includes(busq) ||
@@ -768,51 +767,20 @@ function seccionCatalogo(){
     const matchCat=filtroCat==="todas"||p.categoria===filtroCat;
     return matchBusq&&matchCat;
   });
+}
+
+// Devuelve SOLO el HTML de la grilla/lista de resultados (sin tocar el buscador)
+function htmlResultadosCatalogo(){
+  const prodsFiltrados=productosFiltradosCatalogo();
   const catsFiltradas=[...new Set(prodsFiltrados.map(p=>p.categoria))].sort();
 
-  let html=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
-    <div>
-      <h2 style="font-size:18px;font-weight:600">Catálogo de Productos</h2>
-      <p style="font-size:12px;color:var(--gris);margin-top:2px">${prodsFiltrados.length} de ${productos.length} productos · ${cats.length} categorías</p>
-    </div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-ghost btn-sm" onclick="vistaGrid=!vistaGrid;render()">${vistaGrid?"☰ Lista":"⊞ Galería"}</button>
-      <button class="btn btn-ghost btn-sm" onclick="mostrarImportCSV()">📥 CSV</button>
-      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('bulkFotos').click()">🖼 Subir fotos por lote</button>
-      <input type="file" id="bulkFotos" accept="image/*" multiple style="display:none" onchange="subirFotosLote(this)">
-      <button class="btn btn-naranja" onclick="mostrarFormProd()">+ Agregar producto</button>
-    </div>
-  </div>
-
-  <!-- BUSCADOR -->
-  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
-    <div style="position:relative;flex:1;min-width:200px">
-      <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:15px;pointer-events:none">🔍</span>
-      <input
-        id="inputBusqueda"
-        placeholder="Buscar producto..."
-        value="${esc(busquedaCatalogo)}"
-        oninput="busquedaCatalogo=this.value;render()"
-        style="padding-left:34px;margin:0;width:100%"
-      >
-    </div>
-    <select onchange="filtroCat=this.value;render()" style="width:auto;margin:0">
-      <option value="todas" ${filtroCat==="todas"?"selected":""}>Todas las categorías</option>
-      ${cats.map(c=>`<option value="${esc(c)}" ${filtroCat===c?"selected":""}>${c}</option>`).join("")}
-    </select>
-    ${busquedaCatalogo||filtroCat!=="todas"?`<button class="btn btn-ghost btn-sm" onclick="busquedaCatalogo='';filtroCat='todas';render()">✕ Limpiar</button>`:""}
-  </div>
-
-  <div id="formProd"></div>
-  <div id="loteResultado"></div>`;
-
   if(prodsFiltrados.length===0){
-    html+=productos.length===0
+    return productos.length===0
       ?`<div class="vacio"><div style="font-size:40px;margin-bottom:10px">📦</div><p style="font-weight:600;margin-bottom:4px">Sin productos aún</p><p style="font-size:13px">Agregá tu primer producto con foto o importá desde CSV.</p><button class="btn btn-naranja" style="margin-top:14px" onclick="mostrarFormProd()">+ Agregar primer producto</button></div>`
-      :`<div class="vacio"><div style="font-size:36px;margin-bottom:10px">🔍</div><p style="font-weight:600;margin-bottom:4px">Sin resultados para "${esc(busquedaCatalogo)}"</p><p style="font-size:13px">Probá con otro nombre o categoría.</p><button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="busquedaCatalogo='';filtroCat='todas';render()">Limpiar búsqueda</button></div>`;
-    return html;
+      :`<div class="vacio"><div style="font-size:36px;margin-bottom:10px">🔍</div><p style="font-weight:600;margin-bottom:4px">Sin resultados para "${esc(busquedaCatalogo)}"</p><p style="font-size:13px">Probá con otro nombre o categoría.</p><button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="limpiarBusquedaCatalogo()">Limpiar búsqueda</button></div>`;
   }
 
+  let html="";
   catsFiltradas.forEach(cat=>{
     const prods=prodsFiltrados.filter(p=>p.categoria===cat);
     html+=`<p class="seccion-titulo">${cat} <span style="font-weight:400;color:#94A3B8">(${prods.length})</span></p>`;
@@ -882,6 +850,87 @@ function seccionCatalogo(){
     }
   });
   return html;
+}
+
+// Actualiza el contador de resultados y el botón "Limpiar" sin re-renderizar el buscador
+function actualizarContadorYLimpiarCatalogo(){
+  const cats=[...new Set(productos.map(p=>p.categoria))].sort();
+  const prodsFiltrados=productosFiltradosCatalogo();
+  const contador=document.getElementById("catalogoContador");
+  if(contador)contador.textContent=`${prodsFiltrados.length} de ${productos.length} productos · ${cats.length} categorías`;
+  const limpiar=document.getElementById("catalogoBtnLimpiar");
+  if(limpiar)limpiar.innerHTML=(busquedaCatalogo||filtroCat!=="todas")
+    ?`<button class="btn btn-ghost btn-sm" onclick="limpiarBusquedaCatalogo()">✕ Limpiar</button>`
+    :"";
+}
+
+// Repinta SOLO los resultados del catálogo (deja el <input> intacto → no pierde el foco ni cierra el teclado)
+function actualizarCatalogo(){
+  const cont=document.getElementById("catalogoResultados");
+  if(cont)cont.innerHTML=htmlResultadosCatalogo();
+  actualizarContadorYLimpiarCatalogo();
+}
+
+// Handler del buscador — con debounce para no re-renderizar en cada tecla
+function onBuscarCatalogoInput(valor){
+  busquedaCatalogo=valor;
+  clearTimeout(_debounceBusquedaCatalogo);
+  _debounceBusquedaCatalogo=setTimeout(actualizarCatalogo,200);
+}
+
+function filtrarPorCategoriaCatalogo(cat){
+  filtroCat=cat;
+  actualizarCatalogo();
+}
+
+function limpiarBusquedaCatalogo(){
+  busquedaCatalogo="";
+  filtroCat="todas";
+  const input=document.getElementById("inputBusqueda");
+  if(input)input.value="";
+  actualizarCatalogo();
+}
+
+function seccionCatalogo(){
+  const cats=[...new Set(productos.map(p=>p.categoria))].sort();
+  const prodsFiltrados=productosFiltradosCatalogo();
+
+  return `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+    <div>
+      <h2 style="font-size:18px;font-weight:600">Catálogo de Productos</h2>
+      <p style="font-size:12px;color:var(--gris);margin-top:2px" id="catalogoContador">${prodsFiltrados.length} de ${productos.length} productos · ${cats.length} categorías</p>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="vistaGrid=!vistaGrid;render()">${vistaGrid?"☰ Lista":"⊞ Galería"}</button>
+      <button class="btn btn-ghost btn-sm" onclick="mostrarImportCSV()">📥 CSV</button>
+      <button class="btn btn-ghost btn-sm" onclick="document.getElementById('bulkFotos').click()">🖼 Subir fotos por lote</button>
+      <input type="file" id="bulkFotos" accept="image/*" multiple style="display:none" onchange="subirFotosLote(this)">
+      <button class="btn btn-naranja" onclick="mostrarFormProd()">+ Agregar producto</button>
+    </div>
+  </div>
+
+  <!-- BUSCADOR -->
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+    <div style="position:relative;flex:1;min-width:200px">
+      <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:15px;pointer-events:none">🔍</span>
+      <input
+        id="inputBusqueda"
+        placeholder="Buscar producto..."
+        value="${esc(busquedaCatalogo)}"
+        oninput="onBuscarCatalogoInput(this.value)"
+        style="padding-left:34px;margin:0;width:100%"
+      >
+    </div>
+    <select onchange="filtrarPorCategoriaCatalogo(this.value)" style="width:auto;margin:0">
+      <option value="todas" ${filtroCat==="todas"?"selected":""}>Todas las categorías</option>
+      ${cats.map(c=>`<option value="${esc(c)}" ${filtroCat===c?"selected":""}>${c}</option>`).join("")}
+    </select>
+    <span id="catalogoBtnLimpiar">${busquedaCatalogo||filtroCat!=="todas"?`<button class="btn btn-ghost btn-sm" onclick="limpiarBusquedaCatalogo()">✕ Limpiar</button>`:""}</span>
+  </div>
+
+  <div id="formProd"></div>
+  <div id="loteResultado"></div>
+  <div id="catalogoResultados">${htmlResultadosCatalogo()}</div>`;
 }
 
 // Normaliza texto para comparación — quita acentos, guiones, paréntesis, etc.
