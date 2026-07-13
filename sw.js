@@ -3,7 +3,7 @@
 // Maneja: caché offline + notificaciones push
 // ══════════════════════════════════════════════════════
 
-const CACHE = 'klavo-v5';
+const CACHE = 'klavo-v6';
 const ARCHIVOS = ['/KLAVO/'];
 
 // Instalación — precachear shell
