@@ -10,6 +10,7 @@
 <meta name="apple-mobile-web-app-title" content="KLAVO"/>
 <link rel="manifest" href="manifest.json"/>
 <link rel="apple-touch-icon" href="icon-192.png"/>
+<link rel="icon" type="image/png" href="icon-192.png"/>
 <title>KLAVO · Control</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -158,7 +159,7 @@ const CATS_PROD=["Perfumes","Gorras","Lentes de Sol","Cremas & Dermo","Otro"];
 const SINPE_NUMERO="8888-8888"; // ← cambiá este número al tuyo
 
 let supa=null;
-let socios=[],tareas=[],posts=[],engagement=[],productos=[],ventas=[],clientes=[];
+let socios=[],tareas=[],posts=[],engagement=[],productos=[],ventas=[],clientes=[],proveedores=[];
 let vista="tablero";
 let filtroSocio="todos",filtroEstado="todos";
 let chatHistory=[];
@@ -215,6 +216,7 @@ async function cargarPosts(){const{data}=await supa.from("posts").select("*").or
 async function cargarEngagement(){const{data}=await supa.from("engagement").select("*");engagement=data||[];}
 async function cargarProductos(){const{data,error}=await supa.from("productos").select("*").order("categoria").order("nombre");if(!error)productos=data||[];}
 async function cargarVentas(){const{data,error}=await supa.from("ventas").select("*").order("created_at",{ascending:false});if(!error)ventas=data||[];}
+async function cargarProveedores(){const{data,error}=await supa.from("proveedores").select("*").order("nombre");if(!error)proveedores=data||[];}
 
 async function crearTarea(t){
   await supa.from("tareas").insert([{titulo:t.titulo,detalle:t.detalle,area:t.area,asignado_id:t.asignado_id||null,estado:"pendiente",fecha_entrega:t.fecha_entrega||null}]);
@@ -511,6 +513,7 @@ function render(){
   else if(vista==="socios") mainHtml=seccionSocios();
   else if(vista==="transparencia") mainHtml=seccionTransparencia();
   else if(vista==="catalogo") mainHtml=seccionCatalogo();
+  else if(vista==="proveedores") mainHtml=seccionProveedores();
   else if(vista==="nueva-venta") mainHtml=seccionNuevaVenta();
   else if(vista==="ventas") mainHtml=seccionVentas();
   else if(vista==="ia") mainHtml=seccionIA();
@@ -518,8 +521,8 @@ function render(){
   const instBtn = deferredInstall ? `<button class="btn btn-ghost btn-sm" onclick="instalarPWA()">📲 Instalar app</button>` : '';
   const hdr=`<header><div class="head-in"><div class="logo"><b>KLAVO</b><span class="sep">/</span><span class="tag">Control</span></div><div style="display:flex;gap:8px">${instBtn}<button class="btn btn-ghost btn-sm" onclick="ir('setup')">⚙️ Setup</button><button class="btn btn-naranja" onclick="ir('nueva-tarea')">+ Tarea</button></div></div></header>`;
   const nav='<nav><div class="nav-in">'+
-    ['tablero','tareas','ventas','catalogo','marketing','ia','socios','transparencia'].map((v,i)=>{
-      const labels=["Dashboard","Tareas","Ventas","Catálogo","Marketing","🤖 IA Klavo","Socios","Transparencia"];
+    ['tablero','tareas','ventas','catalogo','proveedores','marketing','ia','socios','transparencia'].map((v,i)=>{
+      const labels=["Dashboard","Tareas","Ventas","Catálogo","Proveedores","Marketing","🤖 IA Klavo","Socios","Transparencia"];
       return`<button class="tab ${vista===v?"activo":""}" onclick="ir('${v}')">${labels[i]}</button>`;
     }).join("")+'</div></nav>';
   const ftr='<footer style="text-align:center">KLAVO © 2025 · Control Integral</footer>';
@@ -718,6 +721,7 @@ function tablero(){
     <div class="acceso-rapido" onclick="ir('nueva-tarea')"><div class="icon">➕</div><div class="label">Nueva tarea</div></div>
     <div class="acceso-rapido" onclick="ir('nueva-venta')"><div class="icon">💰</div><div class="label">Nueva venta</div></div>
     <div class="acceso-rapido" onclick="ir('catalogo')"><div class="icon">📦</div><div class="label">Catálogo</div></div>
+    <div class="acceso-rapido" onclick="ir('proveedores')"><div class="icon">🏭</div><div class="label">Proveedores</div></div>
     <div class="acceso-rapido" onclick="ir('marketing')"><div class="icon">📢</div><div class="label">Marketing</div></div>
     <div class="acceso-rapido" onclick="ir('ia')"><div class="icon">🤖</div><div class="label">IA Klavo</div></div>
     <div class="acceso-rapido" onclick="ir('ventas')"><div class="icon">📊</div><div class="label">Ventas</div></div>
@@ -1221,6 +1225,210 @@ async function procesarCSV(){
 }
 
 // ═══════════════════════════════════════════════════════
+// PROVEEDORES
+// ═══════════════════════════════════════════════════════
+let busquedaProveedores="";
+let filtroEstadoProveedores="todos";
+let ordenProveedores="nombre"; // "nombre" | "categoria"
+let _debounceBusquedaProveedores=null;
+let formProveedorAbierto=null; // id del proveedor en edición, "nuevo", o null
+
+// Normaliza un número de WhatsApp/teléfono a formato wa.me (agrega 506 de Costa Rica si hace falta)
+function whatsappLink(numero){
+  let digitos=(numero||"").replace(/\D/g,"");
+  if(!digitos)return"";
+  if(digitos.length===8)digitos="506"+digitos; // número local de Costa Rica sin código de país
+  return`https://wa.me/${digitos}`;
+}
+
+function proveedoresFiltrados(){
+  const busq=busquedaProveedores.toLowerCase().trim();
+  let lista=proveedores.filter(p=>{
+    const matchBusq=!busq||
+      (p.nombre||"").toLowerCase().includes(busq)||
+      (p.que_vende||"").toLowerCase().includes(busq);
+    const matchEstado=filtroEstadoProveedores==="todos"||p.estado===filtroEstadoProveedores;
+    return matchBusq&&matchEstado;
+  });
+  lista=lista.slice().sort((a,b)=>{
+    const ka=(ordenProveedores==="categoria"?a.que_vende:a.nombre)||"";
+    const kb=(ordenProveedores==="categoria"?b.que_vende:b.nombre)||"";
+    return ka.localeCompare(kb,"es");
+  });
+  return lista;
+}
+
+function htmlResultadosProveedores(){
+  const lista=proveedoresFiltrados();
+  if(lista.length===0){
+    return proveedores.length===0
+      ?`<div class="vacio"><div style="font-size:40px;margin-bottom:10px">🏭</div><p style="font-weight:600;margin-bottom:4px">Sin proveedores aún</p><p style="font-size:13px">Agregá tu primer proveedor para tenerlo siempre a mano.</p><button class="btn btn-naranja" style="margin-top:14px" onclick="mostrarFormProveedor('nuevo')">+ Agregar primer proveedor</button></div>`
+      :`<div class="vacio"><div style="font-size:36px;margin-bottom:10px">🔍</div><p style="font-weight:600;margin-bottom:4px">Sin resultados para "${esc(busquedaProveedores)}"</p><p style="font-size:13px">Probá con otro nombre o producto.</p><button class="btn btn-ghost btn-sm" style="margin-top:10px" onclick="limpiarBusquedaProveedores()">Limpiar búsqueda</button></div>`;
+  }
+  let html=`<div class="card">`;
+  lista.forEach(p=>{
+    const wa=whatsappLink(p.whatsapp);
+    const activo=p.estado!=="inactivo";
+    html+=`<div style="padding:12px 0;border-bottom:1px solid var(--linea)">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="flex:1;min-width:0;cursor:pointer" onclick="mostrarFormProveedor(${p.id})">
+          <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap">
+            <span style="font-size:14px;font-weight:700">${esc(p.nombre)}</span>
+            <span class="badge" style="background:${activo?"#D1FAE5":"#F1F5F9"};color:${activo?"#065F46":"#64748B"}">${activo?"Activo":"Inactivo"}</span>
+          </div>
+          ${p.que_vende?`<div style="font-size:12px;color:var(--gris);margin-top:3px">${esc(p.que_vende)}</div>`:""}
+          ${p.contacto?`<div style="font-size:11px;color:#94A3B8;margin-top:2px">Contacto: ${esc(p.contacto)}</div>`:""}
+          ${p.observaciones?`<div style="font-size:11px;color:#94A3B8;margin-top:2px">${esc(p.observaciones.substring(0,80))}${p.observaciones.length>80?"…":""}</div>`:""}
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;flex-shrink:0">
+          ${wa?`<a href="${wa}" target="_blank" rel="noopener" onclick="event.stopPropagation()" class="btn btn-sm" style="background:#25D366;color:#fff;border:none;white-space:nowrap">📱 WhatsApp</a>`:""}
+          ${p.email?`<a href="mailto:${esc(p.email)}" onclick="event.stopPropagation()" class="btn btn-ghost btn-sm" style="white-space:nowrap">📧 Correo</a>`:""}
+        </div>
+      </div>
+    </div>`;
+  });
+  html+=`</div>`;
+  return html;
+}
+
+function actualizarProveedores(){
+  const cont=document.getElementById("proveedoresResultados");
+  if(cont)cont.innerHTML=htmlResultadosProveedores();
+  const contador=document.getElementById("proveedoresContador");
+  if(contador)contador.textContent=`${proveedoresFiltrados().length} de ${proveedores.length} proveedores`;
+  const limpiar=document.getElementById("proveedoresBtnLimpiar");
+  if(limpiar)limpiar.innerHTML=(busquedaProveedores||filtroEstadoProveedores!=="todos")
+    ?`<button class="btn btn-ghost btn-sm" onclick="limpiarBusquedaProveedores()">✕ Limpiar</button>`
+    :"";
+}
+
+function onBuscarProveedoresInput(valor){
+  busquedaProveedores=valor;
+  clearTimeout(_debounceBusquedaProveedores);
+  _debounceBusquedaProveedores=setTimeout(actualizarProveedores,200);
+}
+
+function filtrarEstadoProveedores(estado){filtroEstadoProveedores=estado;actualizarProveedores();}
+function ordenarProveedores(orden){ordenProveedores=orden;actualizarProveedores();}
+
+function limpiarBusquedaProveedores(){
+  busquedaProveedores="";
+  filtroEstadoProveedores="todos";
+  const input=document.getElementById("inputBusquedaProveedores");
+  if(input)input.value="";
+  actualizarProveedores();
+}
+
+function seccionProveedores(){
+  const lista=proveedoresFiltrados();
+  return`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px">
+    <div>
+      <h2 style="font-size:18px;font-weight:600">Proveedores</h2>
+      <p style="font-size:12px;color:var(--gris);margin-top:2px" id="proveedoresContador">${lista.length} de ${proveedores.length} proveedores</p>
+    </div>
+    <button class="btn btn-naranja" onclick="mostrarFormProveedor('nuevo')">+ Agregar proveedor</button>
+  </div>
+
+  <!-- BUSCADOR -->
+  <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+    <div style="position:relative;flex:1;min-width:200px">
+      <span style="position:absolute;left:11px;top:50%;transform:translateY(-50%);font-size:15px;pointer-events:none">🔍</span>
+      <input
+        id="inputBusquedaProveedores"
+        placeholder="Buscar por nombre o producto..."
+        value="${esc(busquedaProveedores)}"
+        oninput="onBuscarProveedoresInput(this.value)"
+        style="padding-left:34px;margin:0;width:100%"
+      >
+    </div>
+    <select onchange="filtrarEstadoProveedores(this.value)" style="width:auto;margin:0">
+      <option value="todos" ${filtroEstadoProveedores==="todos"?"selected":""}>Todos los estados</option>
+      <option value="activo" ${filtroEstadoProveedores==="activo"?"selected":""}>Activos</option>
+      <option value="inactivo" ${filtroEstadoProveedores==="inactivo"?"selected":""}>Inactivos</option>
+    </select>
+    <select onchange="ordenarProveedores(this.value)" style="width:auto;margin:0">
+      <option value="nombre" ${ordenProveedores==="nombre"?"selected":""}>Ordenar por proveedor</option>
+      <option value="categoria" ${ordenProveedores==="categoria"?"selected":""}>Ordenar por producto</option>
+    </select>
+    <span id="proveedoresBtnLimpiar">${busquedaProveedores||filtroEstadoProveedores!=="todos"?`<button class="btn btn-ghost btn-sm" onclick="limpiarBusquedaProveedores()">✕ Limpiar</button>`:""}</span>
+  </div>
+
+  <div id="formProveedor">${formProveedorAbierto?htmlFormProveedor():""}</div>
+  <div id="proveedoresResultados">${htmlResultadosProveedores()}</div>`;
+}
+
+function mostrarFormProveedor(id){
+  formProveedorAbierto=id;
+  const cont=document.getElementById("formProveedor");
+  if(cont){cont.innerHTML=htmlFormProveedor();cont.scrollIntoView({behavior:"smooth"});}
+  else render();
+}
+
+function cerrarFormProveedor(){
+  formProveedorAbierto=null;
+  const cont=document.getElementById("formProveedor");
+  if(cont)cont.innerHTML="";
+}
+
+function htmlFormProveedor(){
+  const esNuevo=formProveedorAbierto==="nuevo";
+  const p=esNuevo?{}:proveedores.find(x=>String(x.id)===String(formProveedorAbierto))||{};
+  const activo=p.estado!=="inactivo";
+  return`<div class="card" style="border:2px solid var(--naranja);margin-bottom:14px">
+    <h3 style="font-weight:600;margin-bottom:12px">${esNuevo?"Agregar proveedor":"Editar proveedor"}</h3>
+    <input id="pvNombre" placeholder="Nombre del proveedor *" value="${esc(p.nombre||"")}">
+    <input id="pvQueVende" placeholder="¿Qué nos vende? (productos o servicios)" value="${esc(p.que_vende||"")}">
+    <input id="pvWhatsapp" placeholder="WhatsApp (ej: 88887777)" value="${esc(p.whatsapp||"")}">
+    <input id="pvEmail" type="email" placeholder="Correo electrónico" value="${esc(p.email||"")}">
+    <input id="pvContacto" placeholder="Persona de contacto (opcional)" value="${esc(p.contacto||"")}">
+    <label style="display:flex;align-items:center;gap:8px;margin:10px 0;font-size:13px;cursor:pointer">
+      <input type="checkbox" id="pvActivo" ${activo?"checked":""} style="width:auto;margin:0">
+      Proveedor activo
+    </label>
+    <textarea id="pvObs" placeholder="Observaciones" style="width:100%;min-height:70px;padding:10px;border:1px solid var(--linea);border-radius:8px;font-family:inherit;font-size:13px">${esc(p.observaciones||"")}</textarea>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
+      <button class="btn btn-naranja" onclick="guardarProveedor(${esNuevo?"true":"false"},${esNuevo?"null":p.id})">Guardar</button>
+      <button class="btn btn-ghost" onclick="cerrarFormProveedor()">Cancelar</button>
+      ${!esNuevo?`<button class="btn" style="background:#fff;color:#DC2626;border:1px solid #FCA5A5;margin-left:auto" onclick="if(confirm('¿Eliminar este proveedor?'))borrarProveedor(${p.id})">Eliminar</button>`:""}
+    </div>
+  </div>`;
+}
+
+async function guardarProveedor(esNuevo,id){
+  const nombre=document.getElementById("pvNombre").value.trim();
+  if(!nombre){toast("El nombre es obligatorio","err");return;}
+  const datos={
+    nombre,
+    que_vende:document.getElementById("pvQueVende").value.trim(),
+    whatsapp:document.getElementById("pvWhatsapp").value.trim(),
+    email:document.getElementById("pvEmail").value.trim(),
+    contacto:document.getElementById("pvContacto").value.trim(),
+    estado:document.getElementById("pvActivo").checked?"activo":"inactivo",
+    observaciones:document.getElementById("pvObs").value.trim()
+  };
+  if(esNuevo){
+    const{error}=await supa.from("proveedores").insert([datos]);
+    if(error){toast("Error al guardar: "+error.message,"err");return;}
+    toast(`Proveedor "${nombre}" agregado`);
+  }else{
+    const{error}=await supa.from("proveedores").update(datos).eq("id",id);
+    if(error){toast("Error al guardar: "+error.message,"err");return;}
+    toast("Proveedor actualizado");
+  }
+  formProveedorAbierto=null;
+  await cargarProveedores();
+  render();
+}
+
+async function borrarProveedor(id){
+  await supa.from("proveedores").delete().eq("id",id);
+  formProveedorAbierto=null;
+  await cargarProveedores();
+  toast("Proveedor eliminado");
+  render();
+}
+
+// ═══════════════════════════════════════════════════════
 // VENTAS
 // ═══════════════════════════════════════════════════════
 function seccionVentas(){
@@ -1679,12 +1887,14 @@ async function iniciar(){
   // Tablas nuevas — silencioso si no existen
   await cargarProductos().catch(()=>{});
   await cargarVentas().catch(()=>{});
+  await cargarProveedores().catch(()=>{});
   render();
   supa.channel("klavo-rt")
     .on("postgres_changes",{event:"*",schema:"public",table:"socios"},()=>{cargarSocios().then(render);})
     .on("postgres_changes",{event:"*",schema:"public",table:"tareas"},()=>{cargarTareas().then(render);})
     .on("postgres_changes",{event:"*",schema:"public",table:"posts"},()=>{cargarPosts().then(render);})
     .on("postgres_changes",{event:"*",schema:"public",table:"ventas"},()=>{cargarVentas().then(render);})
+    .on("postgres_changes",{event:"*",schema:"public",table:"proveedores"},()=>{cargarProveedores().then(render);})
     .subscribe();
 }
 // ═══════════════════════════════════════════════════════
