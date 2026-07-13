@@ -1843,7 +1843,7 @@ CREATE POLICY "Auth upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id 
     </div>
     <div class="card" style="margin-top:12px">
       <p style="font-size:13px;font-weight:600;margin-bottom:6px">6. 🔔 Notificaciones Push (PWA)</p>
-      <p style="font-size:13px;color:var(--gris);margin-bottom:10px">Para activar notificaciones push en los celulares de los socios necesitás 3 pasos:</p>
+      <p style="font-size:13px;color:var(--gris);margin-bottom:10px">La VAPID key ya está fija en el código — no hace falta que cada socio la configure. Para activar notificaciones push necesitás 2 pasos únicos:</p>
       <p style="font-size:12px;font-weight:600;margin-bottom:4px">Paso 1 — Crear tabla en Supabase:</p>
       <pre class="sql">CREATE TABLE IF NOT EXISTS notificaciones (
   id bigserial PRIMARY KEY,
@@ -1857,12 +1857,9 @@ CREATE POLICY "Auth upload" ON storage.objects FOR INSERT WITH CHECK (bucket_id 
 );
 ALTER TABLE notificaciones ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Allow all" ON notificaciones FOR ALL USING (true) WITH CHECK (true);</pre>
-      <p style="font-size:12px;font-weight:600;margin:8px 0 4px">Paso 2 — Generar VAPID keys:</p>
-      <p style="font-size:12px;color:var(--gris);margin-bottom:6px">Entrá a <a href="https://web-push-codelab.glitch.me" target="_blank" style="color:var(--naranja)">web-push-codelab.glitch.me</a> → Generate → copiá la Public Key</p>
-      <label>VAPID Public Key</label>
-      <input id="vapidInput" placeholder="BEl3..." value="${localStorage.getItem('klavo_vapid_key')||''}">
-      <button class="btn btn-naranja btn-sm" onclick="const v=document.getElementById('vapidInput').value.trim();if(v){localStorage.setItem('klavo_vapid_key',v);toast('✅ VAPID key guardada');}">Guardar VAPID Key</button>
-      <p style="font-size:12px;font-weight:600;margin:10px 0 4px">Paso 3 — Cada socio activa notificaciones:</p>
+      <p style="font-size:12px;font-weight:600;margin:8px 0 4px">Paso 2 — Desplegar la Edge Function 'enviar-push':</p>
+      <p style="font-size:12px;color:var(--gris);margin-bottom:6px">Pegá el código de <code>enviar-push/index.ts</code> en Supabase → Edge Functions, y configurá las secrets <code>VAPID_PUBLIC_KEY</code> y <code>VAPID_PRIVATE_KEY</code> en Edge Functions → Secrets.</p>
+      <p style="font-size:12px;font-weight:600;margin:10px 0 4px">Paso 3 — Cada socio activa notificaciones (una sola vez):</p>
       <p style="font-size:12px;color:var(--gris)">Cada socio abre la app en su celular → pestaña <b>Socios</b> → toca <b>🔔 Activar notif.</b> en su nombre → acepta el permiso del navegador.</p>
     </div>
     <button class="btn btn-ghost" style="margin-top:12px" onclick="ir('tablero')">← Volver al Dashboard</button>
@@ -1901,9 +1898,8 @@ async function iniciar(){
 // PWA — Registro Service Worker + Notificaciones Push
 // ═══════════════════════════════════════════════════════
 
-// VAPID public key — reemplazá con la tuya de OneSignal o generada
-// Para generar: https://web-push-codelab.glitch.me/
-const VAPID_PUBLIC_KEY = localStorage.getItem('klavo_vapid_key') || '';
+// VAPID public key — fija en el código para que todos los socios la usen automáticamente
+const VAPID_PUBLIC_KEY = "BBnrNQI3J71uVMshyZK5E3kYA3_48goyDxR4maYPYktoFzLVBJuJ2s6OawJTHQkjW64SnPLfRKycjoW1u70W-Ew";
 
 async function registrarSW(){
   if(!('serviceWorker' in navigator)) return;
